@@ -6,7 +6,7 @@ from flask import Flask, request, render_template_string
 app = Flask(__name__)
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
-REPLY_TEXT = "yes"
+REPLY_TEXT = "woof woof"
 
 # No matter which one you tap, the answer is still "yes" — that's the joke.
 REPLY_MARKUP = {
