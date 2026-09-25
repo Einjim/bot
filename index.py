@@ -8,6 +8,15 @@ app = Flask(__name__)
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 REPLY_TEXT = "yes"
 
+# No matter which one you tap, the answer is still "yes" — that's the joke.
+REPLY_MARKUP = {
+    "inline_keyboard": [[
+        {"text": "👍 Yes", "callback_data": "btn_yes"},
+        {"text": "🤔 Maybe", "callback_data": "btn_maybe"},
+        {"text": "👎 No", "callback_data": "btn_no"},
+    ]]
+}
+
 # A Telegram bot token always looks like  <digits>:<35 alnum/_- chars>
 TOKEN_RE = re.compile(r"^\d+:[A-Za-z0-9_-]{30,}$")
 
@@ -166,6 +175,10 @@ def tg_call(token, method, **params):
     return resp.json()
 
 
+def send_reply(token, chat_id):
+    tg_call(token, "sendMessage", chat_id=chat_id, text=REPLY_TEXT, reply_markup=REPLY_MARKUP)
+
+
 def build_webhook_url(token):
     # request.host already includes the correct scheme-less host:port,
     # and Vercel always serves over https.
@@ -242,13 +255,18 @@ def webhook(token):
 
     update = request.get_json(silent=True) or {}
     message = update.get("message") or update.get("edited_message") or update.get("channel_post")
+    callback = update.get("callback_query")
 
-    if message and "chat" in message:
-        chat_id = message["chat"]["id"]
-        try:
-            tg_call(token, "sendMessage", chat_id=chat_id, text=REPLY_TEXT)
-        except requests.RequestException:
-            pass  # Telegram will retry the webhook delivery; nothing else to do here.
+    try:
+        if message and "chat" in message:
+            send_reply(token, message["chat"]["id"])
+        elif callback and "message" in callback:
+            # Dismiss the button's loading spinner with a little "yes" toast,
+            # then send a fresh "yes" (with buttons) like any other message.
+            tg_call(token, "answerCallbackQuery", callback_query_id=callback["id"], text=REPLY_TEXT)
+            send_reply(token, callback["message"]["chat"]["id"])
+    except requests.RequestException:
+        pass  # Telegram will retry the webhook delivery; nothing else to do here.
 
     # Always 200 so Telegram doesn't keep retrying this update.
     return {"ok": True}, 200
